@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-stockman"
+version = "0.1.3"
+description = "Inventory management for Django"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "Pablo Valentini", email = "pablondrina@gmail.com"}
+]
+maintainers = [
+    {name = "Pablo Valentini", email = "pablondrina@gmail.com"}
+]
+keywords = [
+    "django",
+    "inventory",
+    "stock",
+    "warehouse",
+    "wms",
+    "holds",
+    "reservations",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.0",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "Django>=5.0,<6.0",
+]
+
+[project.optional-dependencies]
+unfold = [
+    "django-unfold>=0.49,<1.0",
+]
+admin = [
+    "django-unfold>=0.49,<1.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-django>=4.5",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/pablondrina/django-stockman"
+Repository = "https://github.com/pablondrina/django-stockman"
+Changelog = "https://github.com/pablondrina/django-stockman/blob/main/CHANGELOG.md"
+Issues = "https://github.com/pablondrina/django-stockman/issues"
+
+[tool.setuptools]
+packages = [
+    "stockman",
+    "stockman.adapters",
+    "stockman.models",
+    "stockman.protocols",
+    "stockman.management",
+    "stockman.management.commands",
+    "stockman.migrations",
+    "stockman.tests",
+    "stockman.contrib",
+    "stockman.contrib.admin_unfold",
+]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+stockman = "."
+
+[tool.setuptools.package-data]
+stockman = [
+    "py.typed",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501", "B008"]
+exclude = ["migrations"]
+
+[tool.ruff.isort]
+known-first-party = ["stockman"]
+known-third-party = ["django"]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py", "*_test.py"]
+addopts = ["--strict-markers", "-ra"]
+
+[tool.coverage.run]
+source = ["stockman"]
+omit = ["*/migrations/*", "*/tests/*"]
