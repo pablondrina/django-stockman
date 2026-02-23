@@ -7,10 +7,32 @@ from decimal import Decimal
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from stockman.models.enums import HoldStatus
+
+
+class HoldQuerySet(models.QuerySet):
+    """Custom QuerySet for Hold with convenience filters."""
+
+    def active(self):
+        """Active holds: PENDING/CONFIRMED and not expired."""
+        now = timezone.now()
+        return self.filter(
+            status__in=[HoldStatus.PENDING, HoldStatus.CONFIRMED],
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gte=now)
+        )
+
+    def expired(self):
+        """Expired holds: PENDING/CONFIRMED with expires_at in the past."""
+        now = timezone.now()
+        return self.filter(
+            status__in=[HoldStatus.PENDING, HoldStatus.CONFIRMED],
+            expires_at__lt=now,
+        )
 
 
 class Hold(models.Model):
@@ -51,8 +73,9 @@ class Hold(models.Model):
         ContentType,
         on_delete=models.PROTECT,
         related_name='+',
+        verbose_name=_('Tipo de Produto'),
     )
-    object_id = models.PositiveIntegerField()
+    object_id = models.PositiveIntegerField(verbose_name=_('ID do Produto'))
     product = GenericForeignKey('content_type', 'object_id')
     
     # Link to stock (None = demand)
@@ -91,8 +114,9 @@ class Hold(models.Model):
         null=True,
         blank=True,
         related_name='+',
+        verbose_name=_('Tipo de Finalidade'),
     )
-    purpose_id = models.PositiveIntegerField(null=True, blank=True)
+    purpose_id = models.PositiveIntegerField(null=True, blank=True, verbose_name=_('ID da Finalidade'))
     purpose = GenericForeignKey('purpose_type', 'purpose_id')
     
     expires_at = models.DateTimeField(
@@ -103,15 +127,17 @@ class Hold(models.Model):
         help_text=_('Se não concluído até esta data, será liberado automaticamente'),
     )
     
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=timezone.now, verbose_name=_('criado em'))
     resolved_at = models.DateTimeField(
         null=True,
         blank=True,
         verbose_name=_('Resolvido em'),
         help_text=_('Data de fulfillment ou release'),
     )
-    metadata = models.JSONField(default=dict, blank=True)
-    
+    metadata = models.JSONField(default=dict, blank=True, verbose_name=_('Metadados'))
+
+    objects = HoldQuerySet.as_manager()
+
     class Meta:
         verbose_name = _('Reserva')
         verbose_name_plural = _('Reservas')

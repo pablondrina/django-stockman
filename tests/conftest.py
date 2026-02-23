@@ -8,7 +8,7 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 
-from catalog.models import Category, Product
+from offerman.models import Product, Collection
 from stockman.models import Position, PositionKind
 
 
@@ -26,56 +26,53 @@ def user(db):
 
 @pytest.fixture
 def category(db):
-    """Create a test category."""
-    return Category.objects.create(
-        name='Pães',
+    """Create a test collection."""
+    return Collection.objects.create(
+        name='Paes',
         slug='paes',
-        is_active=True
+        is_active=True,
     )
 
 
 @pytest.fixture
-def product(db, category):
+def product(db):
     """Create a test product (non-perishable)."""
     return Product.objects.create(
-        name='Pão de Forma',
-        slug='pao-de-forma',
-        category=category,
-        price=Decimal('10.00'),
-        is_active=True,
-        is_batch_produced=True,
+        sku='PAO-FORMA',
+        name='Pao de Forma',
+        unit='un',
+        base_price_q=1000,  # R$ 10.00
+        is_available=True,
         shelflife=None,  # Non-perishable
-        availability_policy='planned_ok'
+        availability_policy='planned_ok',
     )
 
 
 @pytest.fixture
-def perishable_product(db, category):
+def perishable_product(db):
     """Create a perishable product (shelflife=0, same day only)."""
     return Product.objects.create(
+        sku='CROISSANT',
         name='Croissant',
-        slug='croissant',
-        category=category,
-        price=Decimal('8.00'),
-        is_active=True,
-        is_batch_produced=True,
+        unit='un',
+        base_price_q=800,  # R$ 8.00
+        is_available=True,
         shelflife=0,  # Same day only
-        availability_policy='planned_ok'
+        availability_policy='planned_ok',
     )
 
 
 @pytest.fixture
-def demand_product(db, category):
+def demand_product(db):
     """Create a product that accepts demand."""
     return Product.objects.create(
+        sku='BOLO-ESPECIAL',
         name='Bolo Especial',
-        slug='bolo-especial',
-        category=category,
-        price=Decimal('50.00'),
-        is_active=True,
-        is_batch_produced=True,
+        unit='un',
+        base_price_q=5000,  # R$ 50.00
+        is_available=True,
         shelflife=3,  # 3 days
-        availability_policy='demand_ok'
+        availability_policy='demand_ok',
     )
 
 
@@ -99,8 +96,8 @@ def producao(db):
     position, _ = Position.objects.get_or_create(
         code='producao',
         defaults={
-            'name': 'Área de Produção',
-            'kind': PositionKind.PHYSICAL,  # Changed from PROCESS
+            'name': 'Area de Producao',
+            'kind': PositionKind.PHYSICAL,
             'is_saleable': False
         }
     )
@@ -127,5 +124,3 @@ def friday():
     if days_until_friday == 0:
         days_until_friday = 7
     return today + timedelta(days=days_until_friday)
-
-

@@ -185,6 +185,20 @@ INSTALLED_APPS = [
 ]
 ```
 
+## Shopman Suite
+
+Stockman is part of the [Shopman suite](https://github.com/pablondrina). The admin UI uses shared utilities from [django-shopman-commons](https://github.com/pablondrina/django-shopman-commons):
+
+- `BaseModelAdmin` — textarea-aware ModelAdmin for Unfold
+- `unfold_badge`, `unfold_badge_numeric` — colored badge helpers
+- `format_quantity` — decimal formatting
+
+```python
+from shopman_commons.contrib.admin_unfold.base import BaseModelAdmin
+from shopman_commons.contrib.admin_unfold.badges import unfold_badge, unfold_badge_numeric
+from shopman_commons.formatting import format_quantity
+```
+
 ## Requirements
 
 - Python 3.11+

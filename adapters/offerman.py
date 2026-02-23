@@ -20,6 +20,7 @@ If SKU_VALIDATOR is not configured, get_sku_validator() raises ImproperlyConfigu
 from __future__ import annotations
 
 import logging
+import threading
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 # Cached validator instance
+_lock = threading.Lock()
 _sku_validator: SkuValidator | None = None
 
 
@@ -51,23 +53,25 @@ def get_sku_validator() -> SkuValidator:
     global _sku_validator
 
     if _sku_validator is None:
-        stockman_settings = getattr(settings, "STOCKMAN", {})
-        validator_path = stockman_settings.get("SKU_VALIDATOR")
+        with _lock:
+            if _sku_validator is None:  # double-checked
+                stockman_settings = getattr(settings, "STOCKMAN", {})
+                validator_path = stockman_settings.get("SKU_VALIDATOR")
 
-        if not validator_path:
-            raise ImproperlyConfigured(
-                "STOCKMAN['SKU_VALIDATOR'] must be configured. "
-                "Example: 'offerman.adapters.sku_validator.OffermanSkuValidator'"
-            )
+                if not validator_path:
+                    raise ImproperlyConfigured(
+                        "STOCKMAN['SKU_VALIDATOR'] must be configured. "
+                        "Example: 'offerman.adapters.sku_validator.OffermanSkuValidator'"
+                    )
 
-        try:
-            validator_class = import_string(validator_path)
-            _sku_validator = validator_class()
-            logger.debug("Loaded SKU validator: %s", validator_path)
-        except ImportError as e:
-            raise ImproperlyConfigured(
-                f"Failed to import SKU validator '{validator_path}': {e}"
-            ) from e
+                try:
+                    validator_class = import_string(validator_path)
+                    _sku_validator = validator_class()
+                    logger.debug("Loaded SKU validator: %s", validator_path)
+                except ImportError as e:
+                    raise ImproperlyConfigured(
+                        f"Failed to import SKU validator '{validator_path}': {e}"
+                    ) from e
 
     return _sku_validator
 

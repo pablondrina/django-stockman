@@ -89,7 +89,16 @@ class Quant(models.Model):
         default='',
         verbose_name=_('Lote'),
     )
-    
+    batch_ref = models.ForeignKey(
+        'stockman.Batch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='quants',
+        verbose_name=_('Referência de Lote'),
+        help_text=_('Lote rastreável com metadados (validade, fornecedor, etc.)'),
+    )
+
     # Quantity cache (updated atomically by Move)
     _quantity = models.DecimalField(
         max_digits=12,
@@ -98,20 +107,20 @@ class Quant(models.Model):
         verbose_name=_('Quantidade'),
     )
     
-    metadata = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    metadata = models.JSONField(default=dict, blank=True, verbose_name=_('Metadados'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('criado em'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('atualizado em'))
     
     objects = QuantManager()
     
     class Meta:
-        verbose_name = _('Lançamento')
-        verbose_name_plural = _('Lançamentos')
+        verbose_name = _('Saldo')
+        verbose_name_plural = _('Saldos')
         constraints = [
             models.UniqueConstraint(
                 fields=['content_type', 'object_id', 'position', 'target_date', 'batch'],
                 name='unique_quant_coordinate',
-            )
+            ),
         ]
         indexes = [
             models.Index(fields=['content_type', 'object_id']),
@@ -132,22 +141,13 @@ class Quant(models.Model):
     def held(self) -> Decimal:
         """
         Held quantity — sum of active, non-expired holds.
-        
+
         IMPORTANT: Ignores expired holds even if status is still PENDING/CONFIRMED.
         This ensures availability is always correct, regardless of cron timing.
         """
-        from django.db.models import Q
-        from django.utils import timezone
-        
-        now = timezone.now()
-        result = self.holds.filter(
-            status__in=[HoldStatus.PENDING, HoldStatus.CONFIRMED]
-        ).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gte=now)
-        ).aggregate(
+        return self.holds.active().aggregate(
             total=Coalesce(Sum('quantity'), Decimal('0'))
-        )
-        return result['total']
+        )['total']
     
     @property
     def available(self) -> Decimal:
@@ -197,7 +197,7 @@ class Quant(models.Model):
         return total
     
     def __str__(self) -> str:
-        pos = self.position.code if self.position else '?'
+        pos = self.position_id if self.position_id else '?'
         date_str = f"@{self.target_date}" if self.target_date else ""
-        return f"{self.product} [{pos}{date_str}]: {self._quantity}"
+        return f"Quant#{self.pk} [pos={pos}{date_str}]: {self._quantity}"
 

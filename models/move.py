@@ -29,7 +29,7 @@ class Move(models.Model):
         'stockman.Quant',
         on_delete=models.PROTECT,
         related_name='moves',
-        verbose_name=_('Quantidade'),
+        verbose_name=_('Saldo'),
     )
     
     delta = models.DecimalField(
@@ -46,8 +46,9 @@ class Move(models.Model):
         null=True,
         blank=True,
         related_name='+',
+        verbose_name=_('Tipo de Referência'),
     )
-    reference_id = models.PositiveIntegerField(null=True, blank=True)
+    reference_id = models.PositiveIntegerField(null=True, blank=True, verbose_name=_('ID da Referência'))
     reference = GenericForeignKey('reference_type', 'reference_id')
     
     reason = models.CharField(
@@ -55,9 +56,9 @@ class Move(models.Model):
         verbose_name=_('Motivo'),
         help_text=_('Obrigatório. Ex: "Produção manhã", "Venda #123"'),
     )
-    metadata = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True, verbose_name=_('Metadados'))
     
-    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True, verbose_name=_('Data/Hora'))
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -67,8 +68,8 @@ class Move(models.Model):
     )
     
     class Meta:
-        verbose_name = _('Registro')
-        verbose_name_plural = _('Registros')
+        verbose_name = _('Movimento')
+        verbose_name_plural = _('Movimentos')
         ordering = ['timestamp']
         indexes = [
             models.Index(fields=['quant', 'timestamp']),

@@ -38,6 +38,12 @@ def __getattr__(name):
     elif name == 'HoldStatus':
         from stockman.models.enums import HoldStatus
         return HoldStatus
+    elif name == 'StockAlert':
+        from stockman.models.alert import StockAlert
+        return StockAlert
+    elif name == 'Batch':
+        from stockman.models.batch import Batch
+        return Batch
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -50,6 +56,8 @@ __all__ = [
     'Hold',
     'PositionKind',
     'HoldStatus',
+    'StockAlert',
+    'Batch',
 ]
 
-__version__ = '0.1.3'
+__version__ = '0.2.0'

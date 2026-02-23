@@ -328,13 +328,146 @@ class TestExpiredHoldsIgnored:
         assert stock.available(product, today) == Decimal('0')
 
 
+class TestStockHoldRaceCondition:
+    """S8: Test race condition in hold — NameError fix."""
+
+    def test_hold_after_stock_exhausted_returns_stock_error(self, product, vitrine, today):
+        """Hold when stock is 0 raises StockError, not NameError."""
+        stock.receive(Decimal('10'), product, vitrine, reason='Entrada')
+        stock.hold(Decimal('10'), product, today)
+
+        with pytest.raises(StockError) as exc:
+            stock.hold(Decimal('1'), product, today)
+
+        assert exc.value.code == 'INSUFFICIENT_AVAILABLE'
+
+    def test_hold_insufficient_reports_current_available(self, product, vitrine, today):
+        """StockError includes actual available quantity."""
+        stock.receive(Decimal('10'), product, vitrine, reason='Entrada')
+        stock.hold(Decimal('7'), product, today)
+
+        with pytest.raises(StockError) as exc:
+            stock.hold(Decimal('5'), product, today)
+
+        assert exc.value.code == 'INSUFFICIENT_AVAILABLE'
+        assert exc.value.data['available'] == Decimal('3')
+
+
+class TestStockAvailableWithPosition:
+    """S9: Test available() with position filter."""
+
+    def test_hold_in_position_b_does_not_affect_available_in_position_a(
+        self, product, vitrine, producao, today
+    ):
+        """Hold in position B should not affect available in position A."""
+        stock.receive(Decimal('50'), product, vitrine, reason='Entrada vitrine')
+        stock.receive(Decimal('50'), product, producao, reason='Entrada producao')
+
+        # Hold on vitrine quant
+        stock.hold(Decimal('30'), product, today)
+
+        # Available in producao should be unaffected
+        avail_producao = stock.available(product, today, position=producao)
+        assert avail_producao == Decimal('50')
+
+    def test_available_all_positions_includes_all_holds(
+        self, product, vitrine, producao, today
+    ):
+        """Available without position sums all quants minus all holds."""
+        stock.receive(Decimal('50'), product, vitrine, reason='Entrada vitrine')
+        stock.receive(Decimal('50'), product, producao, reason='Entrada producao')
+
+        stock.hold(Decimal('30'), product, today)
+
+        avail_all = stock.available(product, today)
+        assert avail_all == Decimal('70')
+
+
+class TestStockRecalculate:
+    """S10: Test recalculate()."""
+
+    def test_recalculate_fixes_inconsistency(self, product, vitrine):
+        """Recalculate corrects _quantity when it drifts from moves."""
+        quant = stock.receive(Decimal('100'), product, vitrine, reason='Entrada')
+
+        # Force inconsistency by directly updating _quantity
+        Quant.objects.filter(pk=quant.pk).update(_quantity=Decimal('999'))
+        quant.refresh_from_db()
+        assert quant._quantity == Decimal('999')
+
+        result = quant.recalculate()
+
+        assert result == Decimal('100')
+        quant.refresh_from_db()
+        assert quant._quantity == Decimal('100')
+
+    def test_recalculate_noop_when_consistent(self, product, vitrine):
+        """Recalculate does nothing when _quantity matches moves."""
+        quant = stock.receive(Decimal('50'), product, vitrine, reason='Entrada')
+
+        result = quant.recalculate()
+
+        assert result == Decimal('50')
+        assert quant._quantity == Decimal('50')
+
+
+class TestStockAdjustDeltaZero:
+    """S11: Test adjust() with delta=0."""
+
+    def test_adjust_delta_zero_returns_none(self, product, vitrine):
+        """Adjust with same quantity returns None and creates no Move."""
+        quant = stock.receive(Decimal('50'), product, vitrine, reason='Entrada')
+        initial_moves = quant.moves.count()
+
+        result = stock.adjust(quant, Decimal('50'), reason='Conferência')
+
+        assert result is None
+        assert quant.moves.count() == initial_moves
+
+
+class TestManagementCommandReleaseExpiredHolds:
+    """S12: Test management command release_expired_holds."""
+
+    def test_command_releases_expired(self, product, vitrine, today):
+        """Command releases expired holds."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        stock.receive(Decimal('100'), product, vitrine, reason='Entrada')
+        expires = timezone.now() - timedelta(minutes=1)
+        stock.hold(Decimal('10'), product, today, expires_at=expires)
+
+        out = StringIO()
+        call_command('release_expired_holds', stdout=out)
+
+        assert '1 bloqueio(s) liberado(s)' in out.getvalue()
+
+    def test_command_dry_run(self, product, vitrine, today):
+        """Command --dry-run shows count without releasing."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        stock.receive(Decimal('100'), product, vitrine, reason='Entrada')
+        expires = timezone.now() - timedelta(minutes=1)
+        hold_id = stock.hold(Decimal('10'), product, today, expires_at=expires)
+
+        out = StringIO()
+        call_command('release_expired_holds', '--dry-run', stdout=out)
+
+        assert '1 bloqueio(s) seria(m) liberado(s)' in out.getvalue()
+
+        # Verify hold is still PENDING
+        hold = Hold.objects.get(pk=int(hold_id.split(':')[1]))
+        assert hold.status == HoldStatus.PENDING
+
+
 class TestStockPlan:
     """Tests for stock.plan()."""
-    
+
     def test_plan_creates_future_quant(self, product, friday):
         """Plan creates Quant with target_date."""
         quant = stock.plan(Decimal('50'), product, friday, reason='Produção')
-        
+
         assert quant.target_date == friday
         assert quant._quantity == Decimal('50')
         assert quant.is_future

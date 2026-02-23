@@ -55,8 +55,8 @@ class Position(models.Model):
         verbose_name=_('Metadados'),
     )
     
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('criado em'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('atualizado em'))
     
     class Meta:
         verbose_name = _('Posição')

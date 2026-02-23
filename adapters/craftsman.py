@@ -13,6 +13,7 @@ Vocabulary mapping:
 """
 
 import logging
+import threading
 from datetime import date
 from decimal import Decimal
 from typing import Any, Callable
@@ -182,16 +183,18 @@ class CraftsmanBackend:
             return ProductionStatus(
                 request_id=request_id,
                 sku=work_order.plan.recipe.product_sku,
-                quantity=work_order.quantity,
+                quantity=work_order.planned_quantity,
                 status=_map_workorder_status(work_order.status),
                 target_date=work_order.target_date,
                 estimated_completion=work_order.estimated_completion,
                 work_order_id=str(work_order.uuid),
             )
 
-        except Exception as e:
-            logger.error(f"Failed to check status for {request_id}: {e}")
+        except (ValueError, WorkOrder.DoesNotExist):
             return None
+        except Exception:
+            logger.exception("Unexpected error in check_status for %s", request_id)
+            raise
 
     @transaction.atomic
     def cancel_request(
@@ -271,7 +274,7 @@ class CraftsmanBackend:
                     ProductionStatus(
                         request_id=f"production:{wo.pk}",
                         sku=wo.plan.recipe.product_sku,
-                        quantity=wo.quantity,
+                        quantity=wo.planned_quantity,
                         status=_map_workorder_status(wo.status),
                         target_date=wo.target_date,
                         estimated_completion=wo.estimated_completion,
@@ -281,9 +284,11 @@ class CraftsmanBackend:
 
             return results
 
-        except Exception as e:
-            logger.error(f"Failed to list pending: {e}")
+        except ImportError:
             return []
+        except Exception:
+            logger.exception("Unexpected error in list_pending")
+            raise
 
 
 # ══════════════════════════════════════════════════════════════
@@ -291,6 +296,7 @@ class CraftsmanBackend:
 # ══════════════════════════════════════════════════════════════
 
 
+_lock = threading.Lock()
 _backend_instance: CraftsmanBackend | None = None
 
 
@@ -313,6 +319,14 @@ def get_production_backend(
         return CraftsmanBackend(recipe_resolver=recipe_resolver)
 
     if _backend_instance is None:
-        _backend_instance = CraftsmanBackend()
+        with _lock:
+            if _backend_instance is None:  # double-checked
+                _backend_instance = CraftsmanBackend()
 
     return _backend_instance
+
+
+def reset_production_backend() -> None:
+    """Reset singleton (for tests)."""
+    global _backend_instance
+    _backend_instance = None

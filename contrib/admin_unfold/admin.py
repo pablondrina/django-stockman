@@ -7,13 +7,18 @@ To use, add 'stockman.contrib.admin_unfold' to INSTALLED_APPS after 'stockman'.
 The admins will automatically register the Unfold versions.
 """
 
+import logging
+
 from django.contrib import admin
-from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from unfold.decorators import display
 
-from stockman.contrib.admin_unfold.base import BaseModelAdmin, format_quantity
-from stockman.models import Position, Quant, Move, Hold, HoldStatus
+logger = logging.getLogger(__name__)
+
+from shopman_commons.contrib.admin_unfold.badges import unfold_badge, unfold_badge_numeric
+from shopman_commons.contrib.admin_unfold.base import BaseModelAdmin
+from shopman_commons.formatting import format_quantity
+from stockman.models import Batch, Position, Quant, Move, Hold, HoldStatus, StockAlert
 
 
 # =============================================================================
@@ -33,46 +38,6 @@ def _format_date(d):
     if d:
         return d.strftime('%d/%m/%y')
     return '-'
-
-
-def _unfold_badge_numeric(text, color='base'):
-    """
-    Create Unfold badge for numeric values (normal font size, no uppercase).
-
-    Colors: 'base' (gray), 'red', 'green', 'yellow', 'blue'
-    """
-    base_classes = "inline-block font-semibold h-6 leading-6 px-2 rounded-default whitespace-nowrap"
-
-    color_classes = {
-        'base': 'bg-base-100 text-base-700 dark:bg-base-500/20 dark:text-base-200',
-        'red': 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-        'green': 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
-        'yellow': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
-        'blue': 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-    }
-
-    classes = f"{base_classes} {color_classes.get(color, color_classes['base'])}"
-    return format_html('<span class="{}">{}</span>', classes, text)
-
-
-def _unfold_badge_text(text, color='base'):
-    """
-    Create Unfold badge for alphanumeric text (smaller font, uppercase).
-
-    Colors: 'base' (gray), 'red', 'green', 'yellow', 'blue'
-    """
-    base_classes = "inline-block font-semibold h-6 leading-6 px-2 rounded-default text-[11px] uppercase whitespace-nowrap"
-
-    color_classes = {
-        'base': 'bg-base-100 text-base-700 dark:bg-base-500/20 dark:text-base-200',
-        'red': 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-        'green': 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
-        'yellow': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
-        'blue': 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-    }
-
-    classes = f"{base_classes} {color_classes.get(color, color_classes['base'])}"
-    return format_html('<span class="{}">{}</span>', classes, text)
 
 
 # =============================================================================
@@ -95,16 +60,16 @@ class PositionAdmin(BaseModelAdmin):
 
 
 # =============================================================================
-# QUANT ADMIN
+# SALDO (QUANT) ADMIN
 # =============================================================================
 
 
 @admin.register(Quant)
 class QuantAdmin(BaseModelAdmin):
-    """Admin for Quant model (read-only).
+    """Admin for Saldo/Quant model (read-only).
 
-    Quants should only be modified via stock.add(), stock.remove() etc.
-    to maintain audit trail via Move records.
+    Saldos should only be modified via stock.add(), stock.remove() etc.
+    to maintain audit trail via Movimentação records.
     """
 
     list_display = ['product_display', 'position', 'target_date_display', 'quantity_display', 'held_display', 'available_display']
@@ -145,9 +110,9 @@ class QuantAdmin(BaseModelAdmin):
         held = obj.held
         formatted = format_quantity(held)
         if held > 0:
-            return _unfold_badge_numeric(formatted, 'yellow')
+            return unfold_badge_numeric(formatted, 'yellow')
         else:
-            return _unfold_badge_numeric(formatted, 'base')
+            return unfold_badge_numeric(formatted, 'base')
 
     @display(description=_('Disponivel'))
     def available_display(self, obj):
@@ -155,21 +120,21 @@ class QuantAdmin(BaseModelAdmin):
         available = obj.available
         formatted = format_quantity(available)
         if available > 0:
-            return _unfold_badge_numeric(formatted, 'green')
+            return unfold_badge_numeric(formatted, 'green')
         elif available == 0:
-            return _unfold_badge_numeric(formatted, 'base')
+            return unfold_badge_numeric(formatted, 'base')
         else:
-            return _unfold_badge_numeric(formatted, 'red')
+            return unfold_badge_numeric(formatted, 'red')
 
 
 # =============================================================================
-# MOVE ADMIN
+# MOVIMENTAÇÃO (MOVE) ADMIN
 # =============================================================================
 
 
 @admin.register(Move)
 class MoveAdmin(BaseModelAdmin):
-    """Admin for Move model (read-only)."""
+    """Admin for Movimentação/Move model (read-only)."""
 
     list_display = ['timestamp_display', 'quant_display', 'delta_display', 'reason', 'user']
     list_filter = ['timestamp', 'user']
@@ -193,7 +158,7 @@ class MoveAdmin(BaseModelAdmin):
         """Display timestamp in DD/MM/AA . HH:MM format."""
         return _format_datetime(obj.timestamp)
 
-    @display(description=_('Item'))
+    @display(description=_('Saldo'))
     def quant_display(self, obj):
         return str(obj.quant.product) if obj.quant and obj.quant.product else '?'
 
@@ -202,21 +167,21 @@ class MoveAdmin(BaseModelAdmin):
         """Display delta with Unfold badge."""
         formatted = format_quantity(abs(obj.delta))
         if obj.delta > 0:
-            return _unfold_badge_numeric(f'+{formatted}', 'green')
+            return unfold_badge_numeric(f'+{formatted}', 'green')
         else:
-            return _unfold_badge_numeric(f'-{formatted}', 'red')
+            return unfold_badge_numeric(f'-{formatted}', 'red')
 
 
 # =============================================================================
-# HOLD ADMIN
+# RESERVA (HOLD) ADMIN
 # =============================================================================
 
 
 @admin.register(Hold)
 class HoldAdmin(BaseModelAdmin):
-    """Admin for Hold model (read-only).
+    """Admin for Reserva/Hold model (read-only).
 
-    Holds should only be created via stock.reserve() and released via stock.release()
+    Reservas should only be created via stock.reserve() and released via stock.release()
     to maintain proper inventory accounting. Admin actions allow releasing holds.
     """
 
@@ -252,7 +217,7 @@ class HoldAdmin(BaseModelAdmin):
             HoldStatus.RELEASED: ('LIBERADO', 'base'),
         }
         label, color = status_map.get(obj.status, (obj.get_status_display().upper(), 'base'))
-        return _unfold_badge_text(label, color)
+        return unfold_badge(label, color)
 
     @display(description=_('Data'))
     def target_date_display(self, obj):
@@ -277,7 +242,72 @@ class HoldAdmin(BaseModelAdmin):
             try:
                 stock.release(hold.hold_id, reason='Liberado via admin')
                 count += 1
-            except Exception:
-                pass
+            except (ValueError, LookupError) as exc:
+                logger.warning("release_holds: failed to release %s: %s", hold.hold_id, exc)
 
         self.message_user(request, _('{count} hold(s) liberado(s).').format(count=count))
+
+
+# =============================================================================
+# STOCK ALERT ADMIN
+# =============================================================================
+
+
+@admin.register(StockAlert)
+class StockAlertAdmin(BaseModelAdmin):
+    """Admin for StockAlert model."""
+
+    list_display = ['__str__', 'min_quantity', 'position', 'is_active_display', 'last_triggered_at_display']
+    list_filter = ['is_active', 'position']
+    search_fields = ['object_id']
+    readonly_fields = ['last_triggered_at', 'created_at', 'updated_at']
+
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    @display(description=_('Ativo'))
+    def is_active_display(self, obj):
+        if obj.is_active:
+            return unfold_badge('ATIVO', 'green')
+        return unfold_badge('INATIVO', 'base')
+
+    @display(description=_('Último Disparo'))
+    def last_triggered_at_display(self, obj):
+        return _format_datetime(obj.last_triggered_at)
+
+
+# =============================================================================
+# BATCH (LOT) ADMIN
+# =============================================================================
+
+
+@admin.register(Batch)
+class BatchAdmin(BaseModelAdmin):
+    """Admin for Batch/Lot model."""
+
+    list_display = ['code', 'product_display', 'production_date_display',
+                    'expiry_date_display', 'supplier', 'is_expired_display']
+    list_filter = ['expiry_date', 'production_date']
+    search_fields = ['code', 'supplier']
+    readonly_fields = ['created_at']
+
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    @display(description=_('Produto'))
+    def product_display(self, obj):
+        return str(obj.product) if obj.product else '?'
+
+    @display(description=_('Produção'))
+    def production_date_display(self, obj):
+        return _format_date(obj.production_date)
+
+    @display(description=_('Validade'))
+    def expiry_date_display(self, obj):
+        return _format_date(obj.expiry_date)
+
+    @display(description=_('Expirado'))
+    def is_expired_display(self, obj):
+        if obj.is_expired:
+            return unfold_badge('EXPIRADO', 'red')
+        return unfold_badge('VÁLIDO', 'green')
